@@ -1,69 +1,87 @@
 """
 app.py
 
-Streamlit front-end for the OCR tool.
+Streamlit front-end for the agentic OCR pipeline.
 Run locally with:  streamlit run app.py
 """
 
-import io
+import json
+import os
+import tempfile
 
 import streamlit as st
 from PIL import Image
 
-from ocr_engine import extract_text_with_confidence
+from agents.orchestrator import run_pipeline
 
-st.set_page_config(page_title="Simple OCR Tool", page_icon="📄", layout="centered")
+st.set_page_config(page_title="Agentic OCR Tool", page_icon="🤖", layout="wide")
 
-st.title("📄 Simple OCR Tool")
+st.title("🤖 Agentic OCR Tool")
 st.write(
-    "Upload an image (JPG/PNG) and extract the text inside it. "
-    "Built with Tesseract OCR + OpenCV preprocessing."
+    "Upload an image and watch it move through a multi-agent pipeline: "
+    "**extraction → correction → structuring**, with an orchestrator that "
+    "flags low-confidence results for review."
 )
 
 uploaded_file = st.file_uploader(
     "Upload an image", type=["png", "jpg", "jpeg"], accept_multiple_files=False
 )
 
-with st.sidebar:
-    st.header("Options")
-    lang = st.selectbox(
-        "Language",
-        options=["eng", "eng+urd", "eng+ara"],
-        help="Tesseract language pack to use. More packs can be added in requirements.",
-    )
-    st.caption(
-        "Note: only 'eng' is guaranteed to work out of the box on the free "
-        "hosting tiers unless the extra language data is installed."
-    )
-
 if uploaded_file is not None:
-    image_bytes = uploaded_file.read()
-    image = Image.open(io.BytesIO(image_bytes))
+    image = Image.open(uploaded_file)
 
-    col1, col2 = st.columns(2)
+    # PaddleOCR's predict() needs a file path, so save the upload to a temp file.
+    # Convert to RGB first: uploaded PNGs are often RGBA, and PaddleOCR's
+    # detection model expects 3-channel input.
+    fd, tmp_path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)  # close the handle immediately (Windows locks files if left open)
+    image.convert("RGB").save(tmp_path)
+
+    col1, col2 = st.columns([1, 1])
     with col1:
         st.image(image, caption="Uploaded image", use_column_width=True)
 
-    with st.spinner("Extracting text..."):
-        result = extract_text_with_confidence(image, lang=lang)
+    with st.spinner("Running agentic pipeline (extraction \u2192 correction \u2192 structuring)..."):
+        try:
+            result = run_pipeline(tmp_path)
+        finally:
+            os.unlink(tmp_path)  # always clean up the temp file
 
     with col2:
-        st.subheader("Extracted text")
-        if result["text"]:
-            st.text_area("Result", result["text"], height=300)
-            st.caption(f"Estimated OCR confidence: {result['avg_confidence']}%")
+        if result["needs_review"]:
+            st.warning(f"⚠️ {result['review_reason']}")
+        else:
+            st.success(f"✅ Extraction confidence: {result['confidence']}%")
+
+        tab1, tab2, tab3 = st.tabs(["Structured", "Corrected Text", "Raw OCR"])
+
+        with tab1:
+            st.subheader(f"Document type: {result['structured'].get('document_type', 'unknown')}")
+            st.json(result["structured"])
             st.download_button(
-                label="Download as .txt",
-                data=result["text"],
-                file_name=f"{uploaded_file.name.rsplit('.', 1)[0]}_extracted.txt",
+                "Download JSON",
+                data=json.dumps(result["structured"], indent=2),
+                file_name="structured_output.json",
+                mime="application/json",
+            )
+
+        with tab2:
+            st.text_area("Corrected text", result["corrected_text"], height=250)
+            st.download_button(
+                "Download corrected text",
+                data=result["corrected_text"],
+                file_name="corrected_text.txt",
                 mime="text/plain",
             )
-        else:
-            st.warning(
-                "No text was detected. Try a clearer image or a different scan."
+
+        with tab3:
+            st.text_area("Raw OCR output (before correction)", result["raw_text"], height=250)
+            st.caption(
+                "This is what PaddleOCR extracted before the correction agent "
+                "cleaned it up — useful for seeing exactly what the LLM agent fixed."
             )
 else:
-    st.info("👆 Upload an image to get started.")
+    st.info("👆 Upload an image to run it through the pipeline.")
 
 st.divider()
-st.caption("Built by Usama · Source on GitHub")
+st.caption("Built by Usama · Multi-agent OCR pipeline · Source on GitHub")
