@@ -14,9 +14,14 @@ _ocr_engine = None
 def _get_engine():
     global _ocr_engine
     if _ocr_engine is None:
-        _ocr_engine = PaddleOCR(lang="en", ocr_version="PP-OCRv4")
+        _ocr_engine = PaddleOCR(
+            lang="en",
+            ocr_version="PP-OCRv4",
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
     return _ocr_engine
-
 
 def extract_text(image_path: str) -> dict:
     """

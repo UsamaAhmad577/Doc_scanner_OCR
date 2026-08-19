@@ -58,7 +58,7 @@ def correct_text(raw_text: str) -> str:
     client = _get_client()
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "user", "content": CORRECTION_PROMPT.format(raw_text=raw_text)}
         ],
