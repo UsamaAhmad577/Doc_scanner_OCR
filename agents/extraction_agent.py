@@ -5,7 +5,8 @@ Extraction Agent: runs OCR using PaddleOCR and returns raw extracted text
 plus per-line confidence scores. This is the foundation the other agents
 build on top of.
 """
-
+import os
+os.environ["FLAGS_use_mkldnn"] = "0"
 from paddleocr import PaddleOCR
 
 _ocr_engine = None
@@ -20,6 +21,7 @@ def _get_engine():
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
+            enable_mkldnn=False,
         )
     return _ocr_engine
 
