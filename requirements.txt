@@ -3,7 +3,6 @@ pytesseract==0.3.13
 opencv-python-headless==4.10.0.84
 Pillow>=10.4,<11
 numpy>=1.26,<2.2
-google-genai>=2.0.0
 groq==0.11.0
 paddlepaddle>=3.0.0
 paddleocr>=3.7.0,<4
